@@ -16,9 +16,9 @@ class RQueue extends EventEmitter {
     private delayMs: number;
     private timeoutMs?: number;
     private logger: Logger;
+    private isLogger: boolean;
 
     constructor(private options: RQueueOptions = {}) {
-
         super();
 
         this.delayMs = options.delayMs || 0;
@@ -31,6 +31,8 @@ class RQueue extends EventEmitter {
         this.timeoutMs = options.timeoutMs;
 
         this.logger = options.logger || new Logger();
+
+        this.isLogger = options.isLogger || false;
 
         if (options.autoStart !== false) {
 
@@ -46,7 +48,7 @@ class RQueue extends EventEmitter {
 
             this.taskQueue.enqueue(task);
 
-            this.logger.log(`Task enqueued with priority ${priority} and group ${group}`);
+            if (this.isLogger) this.logger.log(`Task enqueued with priority ${priority} and group ${group}`);
 
             if (!this.isProcessing && !this.isPaused) {
 
@@ -117,7 +119,7 @@ class RQueue extends EventEmitter {
     private async executeTask<T>(task: RTask<T>): Promise<void> {
         this.activeTasks++;
 
-        this.logger.log(`Executing task with priority ${task.priority} and group ${task.group}`);
+        if (this.isLogger) this.logger.log(`Executing task with priority ${task.priority} and group ${task.group}`);
 
         try {
             const result = await withTimeout(task.transaction, this.timeoutMs);
@@ -129,13 +131,13 @@ class RQueue extends EventEmitter {
 
                 task.reject(error);
 
-                this.logger.error(`Task failed with error: ${error.message}`);
+                if (this.isLogger) this.logger.error(`Task failed with error: ${error.message}`);
 
             } else {
 
                 task.reject(new Error('Unknown error'));
 
-                this.logger.error('Task failed with unknown error');
+                if (this.isLogger) this.logger.error('Task failed with unknown error');
 
             }
         } finally {
@@ -150,7 +152,7 @@ class RQueue extends EventEmitter {
 
         this.emit('pause');
 
-        this.logger.log("Queue paused");
+        if (this.isLogger) this.logger.log("Queue paused");
 
     }
 
@@ -162,7 +164,7 @@ class RQueue extends EventEmitter {
 
             this.emit('resume');
 
-            this.logger.log("Queue resumed");
+            if (this.isLogger) this.logger.log("Queue resumed");
 
             this.processQueue();
 
@@ -174,7 +176,7 @@ class RQueue extends EventEmitter {
 
         this.taskQueue.clear();
 
-        this.logger.log("Queue cleared");
+        if (this.isLogger) this.logger.log("Queue cleared");
 
     }
 
@@ -182,7 +184,7 @@ class RQueue extends EventEmitter {
 
         this.processQueue();
 
-        this.logger.log("Queue started");
+        if (this.isLogger) this.logger.log("Queue started");
 
     }
 

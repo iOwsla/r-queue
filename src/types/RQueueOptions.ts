@@ -7,6 +7,7 @@ interface RQueueOptions {
     rateLimit?: { count: number, duration: number };
     timeoutMs?: number;
     logger?: Logger;
+    isLogger?: boolean;
 }
 
 export { RQueueOptions };

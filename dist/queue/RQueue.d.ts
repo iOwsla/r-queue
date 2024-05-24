@@ -11,6 +11,7 @@ declare class RQueue extends EventEmitter {
     private delayMs;
     private timeoutMs?;
     private logger;
+    private isLogger;
     constructor(options?: RQueueOptions);
     enqueue<T>(transaction: RCallback<T>, priority?: number, group?: string): Promise<T>;
     private processQueue;

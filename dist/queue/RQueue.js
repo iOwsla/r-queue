@@ -28,7 +28,8 @@ class RQueue extends EventEmitter_1.EventEmitter {
             this.rateLimiter = new RateLimiter_1.RateLimiter(options.rateLimit.count, options.rateLimit.duration);
         }
         this.timeoutMs = options.timeoutMs;
-        this.logger = new Logger_1.Logger();
+        this.logger = options.logger || new Logger_1.Logger();
+        this.isLogger = options.isLogger || false;
         if (options.autoStart !== false) {
             this.processQueue();
         }
@@ -38,7 +39,8 @@ class RQueue extends EventEmitter_1.EventEmitter {
             return new Promise((resolve, reject) => {
                 const task = { transaction, resolve, reject, priority, group };
                 this.taskQueue.enqueue(task);
-                this.logger.log(`Task enqueued with priority ${priority} and group ${group}`);
+                if (this.isLogger)
+                    this.logger.log(`Task enqueued with priority ${priority} and group ${group}`);
                 if (!this.isProcessing && !this.isPaused) {
                     this.processQueue();
                 }
@@ -83,7 +85,8 @@ class RQueue extends EventEmitter_1.EventEmitter {
     executeTask(task) {
         return __awaiter(this, void 0, void 0, function* () {
             this.activeTasks++;
-            this.logger.log(`Executing task with priority ${task.priority} and group ${task.group}`);
+            if (this.isLogger)
+                this.logger.log(`Executing task with priority ${task.priority} and group ${task.group}`);
             try {
                 const result = yield (0, Timeout_1.withTimeout)(task.transaction, this.timeoutMs);
                 task.resolve(result);
@@ -91,11 +94,13 @@ class RQueue extends EventEmitter_1.EventEmitter {
             catch (error) {
                 if (error instanceof Error) {
                     task.reject(error);
-                    this.logger.error(`Task failed with error: ${error.message}`);
+                    if (this.isLogger)
+                        this.logger.error(`Task failed with error: ${error.message}`);
                 }
                 else {
                     task.reject(new Error('Unknown error'));
-                    this.logger.error('Task failed with unknown error');
+                    if (this.isLogger)
+                        this.logger.error('Task failed with unknown error');
                 }
             }
             finally {
@@ -106,23 +111,27 @@ class RQueue extends EventEmitter_1.EventEmitter {
     pause() {
         this.isPaused = true;
         this.emit('pause');
-        this.logger.log("Queue paused");
+        if (this.isLogger)
+            this.logger.log("Queue paused");
     }
     resume() {
         if (this.isPaused) {
             this.isPaused = false;
             this.emit('resume');
-            this.logger.log("Queue resumed");
+            if (this.isLogger)
+                this.logger.log("Queue resumed");
             this.processQueue();
         }
     }
     clear() {
         this.taskQueue.clear();
-        this.logger.log("Queue cleared");
+        if (this.isLogger)
+            this.logger.log("Queue cleared");
     }
     start() {
         this.processQueue();
-        this.logger.log("Queue started");
+        if (this.isLogger)
+            this.logger.log("Queue started");
     }
     get length() {
         return this.taskQueue.length;

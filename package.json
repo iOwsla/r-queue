@@ -1,0 +1,23 @@
+{
+  "name": "r-queue",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "queue",
+    "transaction-queue",
+    "tqueue",
+    "fast-q",
+    "p-queue"
+  ],
+  "author": "owsla",
+  "license": "ISC",
+  "description": "A flexible and easy-to-use queue system for handling asynchronous transactions with concurrency control and rate limiting.",
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,6 +1,6 @@
 {
-  "name": "r-queue",
-  "version": "1.0.0",
+  "name": "@owsla/r-queue",
+  "version": "1.0.2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -13,8 +13,12 @@
     "fast-q",
     "p-queue"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iowsla/r-queue.git"
+  },
   "author": "owsla",
-  "license": "ISC",
+  "license": "MIT",
   "description": "A flexible and easy-to-use queue system for handling asynchronous transactions with concurrency control and rate limiting.",
   "devDependencies": {
     "@types/node": "^20.12.12",

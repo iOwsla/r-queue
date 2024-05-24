@@ -17,7 +17,7 @@ RQueue is a powerful and flexible task queue library for Node.js and TypeScript.
 ## Installation
 
 ```sh
-npm install r-queue
+npm install @owsla/r-queue
 ```
 
 ## Usage
@@ -27,7 +27,7 @@ npm install r-queue
 First, create an instance of `RQueue` with the desired options. You can specify options like `concurrency`, `autoStart`, `delayMs`, `rateLimit`, and `timeoutMs`.
 
 ```typescript
-import { RQueue } from 'r-queue';
+import { RQueue } from '@owsla/r-queue';
 
 // Create a queue with a concurrency of 2
 const queue = new RQueue({ concurrency: 2 });
@@ -151,7 +151,7 @@ queue.enqueue(async () => {
 RQueue includes a basic logger. You can extend or replace it as needed. Here's how you can use a custom logger:
 
 ```typescript
-import { Logger } from 'r-queue';
+import { Logger } from '@owsla/r-queue';
 
 class CustomLogger extends Logger {
   log(message: string): void {

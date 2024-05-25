@@ -10,8 +10,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RateLimiter = void 0;
-class RateLimiter {
+const events_1 = require("events");
+class RateLimiter extends events_1.EventEmitter {
     constructor(count, duration) {
+        super();
         this.count = count;
         this.duration = duration;
         this.processedCount = 0;
@@ -24,14 +26,18 @@ class RateLimiter {
             if (elapsedTime > this.duration) {
                 this.processedCount = 0;
                 this.startTime = currentTime;
+                this.emit('reset');
             }
             if (this.processedCount >= this.count) {
                 const waitTime = this.duration - elapsedTime;
+                this.emit('limitReached', waitTime);
                 yield new Promise(resolve => setTimeout(resolve, waitTime));
                 this.processedCount = 0;
                 this.startTime = Date.now();
+                this.emit('reset');
             }
             this.processedCount++;
+            this.emit('check', this.processedCount);
         });
     }
 }

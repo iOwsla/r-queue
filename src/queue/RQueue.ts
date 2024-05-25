@@ -4,7 +4,6 @@ import { RTask } from "../models/RTask";
 import { RateLimiter } from "../rateLimiter/RateLimiter";
 import { RQueueOptions } from "../types/RQueueOptions";
 import { withTimeout } from "../utils/Timeout";
-import { Logger } from "../utils/Logger";
 import { RCallback } from "../types/RCallback";
 
 class RQueue extends EventEmitter {
@@ -15,8 +14,7 @@ class RQueue extends EventEmitter {
     private rateLimiter?: RateLimiter;
     private delayMs: number;
     private timeoutMs?: number;
-    private logger: Logger;
-    private isLogger: boolean;
+    private autoStart: boolean;
 
     constructor(private options: RQueueOptions = {}) {
         super();
@@ -24,186 +22,109 @@ class RQueue extends EventEmitter {
         this.delayMs = options.delayMs || 0;
 
         if (options.rateLimit) {
-
             this.rateLimiter = new RateLimiter(options.rateLimit.count, options.rateLimit.duration);
+            this.rateLimiter.on('limitReached', (waitTime: number) => this.emit('rateLimitReached', waitTime));
+            this.rateLimiter.on('reset', () => this.emit('rateLimitReset'));
+            this.rateLimiter.on('check', (processedCount: number) => this.emit('rateLimitCheck', processedCount));
         }
 
         this.timeoutMs = options.timeoutMs;
+        this.autoStart = options.autoStart || false;
 
-        this.logger = options.logger || new Logger();
-
-        this.isLogger = options.isLogger || false;
-
-        if (options.autoStart !== false) {
-
-            this.processQueue();
-
-        }
-
+        if (this.autoStart) this.processQueue();
     }
 
-    public async enqueue<T>(transaction: RCallback<T>, priority: number = 0, group?: string): Promise<T> {
-        return new Promise((resolve, reject) => {
-            const task: RTask<T> = { transaction, resolve, reject, priority, group };
+    public enqueue<T>(transaction: RCallback<T>, priority: number = 0, group?: string): void {
+        const task: RTask<T> = { transaction, resolve: () => { }, reject: () => { }, priority, group };
+        this.taskQueue.enqueue(task);
+    }
 
-            this.taskQueue.enqueue(task);
-
-            if (this.isLogger) this.logger.log(`Task enqueued with priority ${priority} and group ${group}`);
-
-            if (!this.isProcessing && !this.isPaused) {
-
-                this.processQueue();
-            }
-
-        });
+    public start(): void {
+        if (!this.isProcessing && !this.isPaused) {
+            this.processQueue();
+        }
     }
 
     private async processQueue(): Promise<void> {
-
-        if (this.isProcessing || this.isPaused) return;
+        if (this.isProcessing) return;
 
         this.isProcessing = true;
-
         this.emit('start');
 
-        while (this.taskQueue.length > 0 && !this.isPaused) {
-
-            if (this.rateLimiter) {
-
-                await this.rateLimiter.check();
-
+        while (this.taskQueue.length > 0) {
+            if (this.isPaused) {
+                this.isProcessing = false;
+                return;
             }
 
-            const concurrentTransactions: Promise<any>[] = [];
+            const concurrentTransactions: Promise<void>[] = [];
 
             while (this.taskQueue.length > 0 && concurrentTransactions.length < (this.options.concurrency || 1)) {
+                if (this.rateLimiter) await this.rateLimiter.check();
 
                 const task = this.taskQueue.dequeue();
 
-                if (task) {
-
-                    concurrentTransactions.push(this.executeTask(task));
-
-                }
+                if (task) concurrentTransactions.push(this.executeTask(task));
             }
 
-            try {
-
-                const results = await Promise.all(concurrentTransactions);
-
-                this.emit('success', results);
-
-            } catch (error) {
-
-                this.emit('error', error);
-
-            }
+            await Promise.all(concurrentTransactions);
 
             if (this.delayMs > 0) {
-
                 await new Promise(resolve => setTimeout(resolve, this.delayMs));
-
             }
 
             this.emit('progress', { remaining: this.taskQueue.length, active: this.activeTasks });
         }
 
         this.isProcessing = false;
-
-        this.emit('end');
-
-        if (this.taskQueue.length === 0) this.emit('drain');
-
+        if (this.taskQueue.length === 0) {
+            this.emit('end');
+            this.emit('drain');
+        }
     }
 
     private async executeTask<T>(task: RTask<T>): Promise<void> {
         this.activeTasks++;
 
-        if (this.isLogger) this.logger.log(`Executing task with priority ${task.priority} and group ${task.group}`);
-
         try {
             const result = await withTimeout(task.transaction, this.timeoutMs);
-
-            task.resolve(result);
+            this.emit('success', result);
         } catch (error) {
-
-            if (error instanceof Error) {
-
-                task.reject(error);
-
-                if (this.isLogger) this.logger.error(`Task failed with error: ${error.message}`);
-
-            } else {
-
-                task.reject(new Error('Unknown error'));
-
-                if (this.isLogger) this.logger.error('Task failed with unknown error');
-
-            }
+            this.emit('error', error);
         } finally {
-
             this.activeTasks--;
-
         }
     }
 
     public pause(): void {
-        this.isPaused = true;
-
-        this.emit('pause');
-
-        if (this.isLogger) this.logger.log("Queue paused");
-
+        if (!this.isPaused && this.isProcessing) {
+            this.isPaused = true;
+            this.emit('pause');
+        }
     }
 
     public resume(): void {
-
         if (this.isPaused) {
-
             this.isPaused = false;
-
             this.emit('resume');
-
-            if (this.isLogger) this.logger.log("Queue resumed");
-
             this.processQueue();
-
         }
-
     }
 
     public clear(): void {
-
         this.taskQueue.clear();
-
-        if (this.isLogger) this.logger.log("Queue cleared");
-
-    }
-
-    public start(): void {
-
-        this.processQueue();
-
-        if (this.isLogger) this.logger.log("Queue started");
-
     }
 
     public get length(): number {
-
         return this.taskQueue.length;
-
     }
 
     public get processing(): boolean {
-
         return this.isProcessing;
-
     }
 
     public get paused(): boolean {
-        
         return this.isPaused;
-
     }
 }
 

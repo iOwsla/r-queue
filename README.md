@@ -1,6 +1,6 @@
 # RQueue
 
-RQueue is a powerful and flexible task queue library for Node.js and TypeScript. It supports features like task prioritization, task grouping, pausing and resuming, rate limiting, timeout management, error handling, logging, and progress tracking. Designed with Clean Code and SOLID principles in mind, RQueue helps you manage task execution efficiently and effectively.
+RQueue is a powerful and flexible task queue library for Node.js and TypeScript. It supports features like task prioritization, task grouping, pausing and resuming, rate limiting, timeout management, error handling, and progress tracking. Designed with Clean Code and SOLID principles in mind, RQueue helps you manage task execution efficiently and effectively.
 
 ## Features
 
@@ -10,9 +10,8 @@ RQueue is a powerful and flexible task queue library for Node.js and TypeScript.
 - **Rate Limiting**: Control the rate of task execution to avoid overloading resources.
 - **Timeout Management**: Set timeouts for tasks to ensure timely completion.
 - **Error Handling**: Comprehensive error management and retry mechanisms.
-- **Logging**: Detailed logging for monitoring queue activities and task execution.
 - **Progress Tracking**: Track the progress of task execution.
-- **Extensible**: Easily extendable with additional features and integrations.
+- **Event Emission**: Detailed event emission for monitoring queue activities and task execution.
 
 ## Installation
 
@@ -113,6 +112,10 @@ rateLimitedQueue.enqueue(async () => {
   // Your async task logic
   return 'Rate limited task completed';
 });
+
+rateLimitedQueue.on('rateLimitReached', (waitTime: number) => console.log(`Rate limit reached. Waiting for ${waitTime}ms`));
+rateLimitedQueue.on('rateLimitReset', () => console.log('Rate limit reset'));
+rateLimitedQueue.on('rateLimitCheck', (processedCount: number) => console.log(`Rate limit check. Processed count: ${processedCount}`));
 ```
 
 ### Timeout Management
@@ -146,33 +149,6 @@ queue.enqueue(async () => {
 });
 ```
 
-### Logging
-
-RQueue includes a basic logger. You can extend or replace it as needed. Here's how you can use a custom logger:
-
-```typescript
-import { Logger } from '@owsla/r-queue';
-
-class CustomLogger extends Logger {
-  log(message: string): void {
-    // Custom log logic
-    console.log(`[CUSTOM LOG] ${message}`);
-  }
-
-  error(message: string): void {
-    // Custom error log logic
-    console.error(`[CUSTOM ERROR] ${message}`);
-  }
-}
-
-const customLogger = new CustomLogger();
-const queueWithCustomLogger = new RQueue({ logger: customLogger });
-
-queueWithCustomLogger.enqueue(async () => {
-  return 'Task with custom logging';
-});
-```
-
 ### Progress Tracking
 
 Track the progress of tasks in the queue, including the number of remaining and active tasks.
@@ -202,7 +178,7 @@ new RQueue(options?: RQueueOptions)
 
 #### Methods
 
-- `enqueue<T>(transaction: RCallback<T>, priority?: number, group?: string): Promise<T>`: Add a task to the queue.
+- `enqueue<T>(transaction: RCallback<T>, priority?: number, group?: string): void`: Add a task to the queue.
 - `pause(): void`: Pause the queue processing.
 - `resume(): void`: Resume the queue processing.
 - `clear(): void`: Clear all tasks in the queue.
@@ -224,6 +200,9 @@ new RQueue(options?: RQueueOptions)
 - `'pause'`: Emitted when the queue is paused.
 - `'resume'`: Emitted when the queue is resumed.
 - `'progress'`: Emitted to track progress.
+- `'rateLimitReached'`: Emitted when the rate limit is reached.
+- `'rateLimitReset'`: Emitted when the rate limit is reset.
+- `'rateLimitCheck'`: Emitted to check the number of processed tasks.
 
 ## License
 

@@ -14,7 +14,6 @@ const EventEmitter_1 = require("../events/EventEmitter");
 const TaskQueue_1 = require("./TaskQueue");
 const RateLimiter_1 = require("../rateLimiter/RateLimiter");
 const Timeout_1 = require("../utils/Timeout");
-const Logger_1 = require("../utils/Logger");
 class RQueue extends EventEmitter_1.EventEmitter {
     constructor(options = {}) {
         super();
@@ -26,82 +25,65 @@ class RQueue extends EventEmitter_1.EventEmitter {
         this.delayMs = options.delayMs || 0;
         if (options.rateLimit) {
             this.rateLimiter = new RateLimiter_1.RateLimiter(options.rateLimit.count, options.rateLimit.duration);
+            this.rateLimiter.on('limitReached', (waitTime) => this.emit('rateLimitReached', waitTime));
+            this.rateLimiter.on('reset', () => this.emit('rateLimitReset'));
+            this.rateLimiter.on('check', (processedCount) => this.emit('rateLimitCheck', processedCount));
         }
         this.timeoutMs = options.timeoutMs;
-        this.logger = options.logger || new Logger_1.Logger();
-        this.isLogger = options.isLogger || false;
-        if (options.autoStart !== false) {
+        this.autoStart = options.autoStart || false;
+        if (this.autoStart)
+            this.processQueue();
+    }
+    enqueue(transaction, priority = 0, group) {
+        const task = { transaction, resolve: () => { }, reject: () => { }, priority, group };
+        this.taskQueue.enqueue(task);
+    }
+    start() {
+        if (!this.isProcessing && !this.isPaused) {
             this.processQueue();
         }
     }
-    enqueue(transaction_1) {
-        return __awaiter(this, arguments, void 0, function* (transaction, priority = 0, group) {
-            return new Promise((resolve, reject) => {
-                const task = { transaction, resolve, reject, priority, group };
-                this.taskQueue.enqueue(task);
-                if (this.isLogger)
-                    this.logger.log(`Task enqueued with priority ${priority} and group ${group}`);
-                if (!this.isProcessing && !this.isPaused) {
-                    this.processQueue();
-                }
-            });
-        });
-    }
     processQueue() {
         return __awaiter(this, void 0, void 0, function* () {
-            if (this.isProcessing || this.isPaused)
+            if (this.isProcessing)
                 return;
             this.isProcessing = true;
             this.emit('start');
-            while (this.taskQueue.length > 0 && !this.isPaused) {
-                if (this.rateLimiter) {
-                    yield this.rateLimiter.check();
+            while (this.taskQueue.length > 0) {
+                if (this.isPaused) {
+                    this.isProcessing = false;
+                    return;
                 }
                 const concurrentTransactions = [];
                 while (this.taskQueue.length > 0 && concurrentTransactions.length < (this.options.concurrency || 1)) {
+                    if (this.rateLimiter)
+                        yield this.rateLimiter.check();
                     const task = this.taskQueue.dequeue();
-                    if (task) {
+                    if (task)
                         concurrentTransactions.push(this.executeTask(task));
-                    }
                 }
-                try {
-                    const results = yield Promise.all(concurrentTransactions);
-                    this.emit('success', results);
-                }
-                catch (error) {
-                    this.emit('error', error);
-                }
+                yield Promise.all(concurrentTransactions);
                 if (this.delayMs > 0) {
                     yield new Promise(resolve => setTimeout(resolve, this.delayMs));
                 }
                 this.emit('progress', { remaining: this.taskQueue.length, active: this.activeTasks });
             }
             this.isProcessing = false;
-            this.emit('end');
-            if (this.taskQueue.length === 0)
+            if (this.taskQueue.length === 0) {
+                this.emit('end');
                 this.emit('drain');
+            }
         });
     }
     executeTask(task) {
         return __awaiter(this, void 0, void 0, function* () {
             this.activeTasks++;
-            if (this.isLogger)
-                this.logger.log(`Executing task with priority ${task.priority} and group ${task.group}`);
             try {
                 const result = yield (0, Timeout_1.withTimeout)(task.transaction, this.timeoutMs);
-                task.resolve(result);
+                this.emit('success', result);
             }
             catch (error) {
-                if (error instanceof Error) {
-                    task.reject(error);
-                    if (this.isLogger)
-                        this.logger.error(`Task failed with error: ${error.message}`);
-                }
-                else {
-                    task.reject(new Error('Unknown error'));
-                    if (this.isLogger)
-                        this.logger.error('Task failed with unknown error');
-                }
+                this.emit('error', error);
             }
             finally {
                 this.activeTasks--;
@@ -109,29 +91,20 @@ class RQueue extends EventEmitter_1.EventEmitter {
         });
     }
     pause() {
-        this.isPaused = true;
-        this.emit('pause');
-        if (this.isLogger)
-            this.logger.log("Queue paused");
+        if (!this.isPaused && this.isProcessing) {
+            this.isPaused = true;
+            this.emit('pause');
+        }
     }
     resume() {
         if (this.isPaused) {
             this.isPaused = false;
             this.emit('resume');
-            if (this.isLogger)
-                this.logger.log("Queue resumed");
             this.processQueue();
         }
     }
     clear() {
         this.taskQueue.clear();
-        if (this.isLogger)
-            this.logger.log("Queue cleared");
-    }
-    start() {
-        this.processQueue();
-        if (this.isLogger)
-            this.logger.log("Queue started");
     }
     get length() {
         return this.taskQueue.length;
